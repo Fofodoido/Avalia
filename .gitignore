@@ -1,0 +1,32 @@
+# --- Ambientes Virtuais ---
+# Ignora o ambiente virtual do Python que o seu README recomenda criar
+.venv/
+venv/
+env/
+
+# --- Arquivos de Segredos ---
+# NUNCA envie seu arquivo .env para o GitHub!
+.env
+
+# --- Cache e Bytecode do Python ---
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# --- Artefatos de Teste (para quando você implementar os testes) ---
+.pytest_cache/
+.coverage
+htmlcov/
+
+# --- Saídas dos Scripts ---
+# Ignora os relatórios .xlsx gerados pelos scripts
+*.xlsx
+
+# Ignora os relatórios .md gerados pelo aval-usuario.py
+# (Usando padrões para não ignorar seus READMEs)
+*-analysis.md
+*-report.md
+
+# --- Configurações de IDE (Ex: VSCode) ---
+.vscode/

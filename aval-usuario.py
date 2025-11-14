@@ -11,11 +11,11 @@ import numpy as np
 from github import Github, GithubException, UnknownObjectException
 
 try:
-    from openai import OpenAI
-    OPENAI_AVAILABLE = True
+    import google.generativeai as genai
+    GEMINI_AVAILABLE = True
 except ImportError:
-    OPENAI_AVAILABLE = False
-    print("[warning] OpenAI não disponível. Instale com: pip install openai")
+    GEMINI_AVAILABLE = False
+    print("[warning] Google Gemini não disponível. Instale com: pip install google-generativeai")
 
 try:
     from dotenv import load_dotenv
@@ -37,70 +37,81 @@ class DetailedAgileAnalyzer:
         self.client = None
         self.enabled = False
         
-        if not OPENAI_AVAILABLE:
+        if not GEMINI_AVAILABLE:
             return
+        
+        # Procura pela chave do Gemini
+        gemini_key = api_key or os.getenv("GEMINI_API_KEY")
             
-        if api_key or os.getenv("OPENAI_API_KEY"):
+        if gemini_key:
             try:
-                self.client = OpenAI(api_key=api_key or os.getenv("OPENAI_API_KEY"))
-                self.client.models.list()
+                genai.configure(api_key=gemini_key)
+                # Usando gemini-pro por ser rápido e eficiente para esta tarefa
+                self.client = genai.GenerativeModel('gemini-pro')
                 self.enabled = True
-                print("[ai] Cliente OpenAI inicializado com sucesso")
+                print("[ai] Cliente Google Gemini inicializado com sucesso")
             except Exception as e:
-                print(f"[ai] Falha ao inicializar cliente OpenAI: {e}")
+                print(f"[ai] Falha ao inicializar cliente Gemini: {e}")
     
-    def _call_openai(self, messages: List[Dict], max_tokens: int = 200) -> Optional[str]:
-        """Chamada segura para API OpenAI."""
-        if not self.enabled:
-            return None
-            
-        try:
-            response = self.client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=messages,
-                max_tokens=max_tokens,
+    def _call_gemini(self, prompt: str, max_tokens: int = 200) -> Optional[str]:
+            """Chamada segura para API Gemini."""
+            if not self.client:
+                return None
+                
+            # Configuração da geração
+            generation_config = genai.types.GenerationConfig(
+                max_output_tokens=max_tokens,
                 temperature=0.3,
-                timeout=15
+                top_p=1.0,
             )
-            return response.choices[0].message.content.strip()
-        except Exception as e:
-            print(f"[ai] Erro na API OpenAI: {e}")
-            return None
+            
+            try:
+                response = self.client.generate_content(
+                    prompt,
+                    generation_config=generation_config
+                )
+                
+                # Verifica se a resposta foi bloqueada por segurança
+                if not response.candidates:
+                    print("[ai] Resposta bloqueada por filtros de segurança.")
+                    return None
+
+                return response.text.strip()
+            except Exception as e:
+                print(f"[ai] Erro na API Gemini: {e}")
+                return None
     
     def analyze_commits_detailed(self, commits_data: List[Dict]) -> Dict:
-        """Análise detalhada de commits com IA."""
-        if not commits_data:
-            return {"score": 0.5, "analysis": "Nenhum commit encontrado", "recommendations": []}
-        
-        # Extrair mensagens
-        messages = [c["message"] for c in commits_data if c["message"]]
-        
-        if not self.enabled or not messages:
-            return {
-                "score": 0.5, 
-                "analysis": f"Análise básica: {len(messages)} commits encontrados",
-                "recommendations": ["Configure OpenAI para análise detalhada"]
-            }
-        
-        # Análise com IA
-        messages_text = "\n".join([f"- {msg}" for msg in messages[:10]])
-        
-        prompt_messages = [
-            {
-                "role": "system",
-                "content": "Você é um especialista em práticas ágeis e qualidade de commits. "
-                          "Analise as mensagens de commit e forneça: "
-                          "1) Uma pontuação de 0.0 a 1.0 "
-                          "2) Análise detalhada dos pontos fortes e fracos "
-                          "3) 3 recomendações específicas para melhoria"
-            },
-            {
-                "role": "user",
-                "content": f"Analise estas mensagens de commit:\n{messages_text}"
-            }
-        ]
-        
-        result = self._call_openai(prompt_messages, max_tokens=300)
+            """Análise detalhada de commits com IA."""
+            if not commits_data:
+                return {"score": 0.5, "analysis": "Nenhum commit encontrado", "recommendations": []}
+            
+            # Extrair mensagens
+            messages = [c["message"] for c in commits_data if c["message"]]
+            
+            if not self.enabled or not messages:
+                return {
+                    "score": 0.5, 
+                    "analysis": f"Análise básica: {len(messages)} commits encontrados",
+                    "recommendations": ["Configure o Gemini para análise detalhada"]
+                }
+            
+            # Análise com IA
+            messages_text = "\n".join([f"- {msg}" for msg in messages[:10]])
+            
+            # Prompt de string única para o Gemini
+            prompt = f"""
+    Você é um especialista em práticas ágeis e qualidade de commits.
+    Analise as mensagens de commit e forneça:
+    1) Uma pontuação de 0.0 a 1.0
+    2) Análise detalhada dos pontos fortes e fracos
+    3) 3 recomendações específicas para melhoria
+
+    Analise estas mensagens de commit:
+    {messages_text}
+    """
+            
+            result = self._call_gemini(prompt, max_tokens=300)
         
         if result:
             # Extrair pontuação
